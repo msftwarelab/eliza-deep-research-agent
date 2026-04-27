@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Generated reports
+reports/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Runtime cache
+cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# TypeScript
+*.tsbuildinfo
