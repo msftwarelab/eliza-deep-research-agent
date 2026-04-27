@@ -1,5 +1,6 @@
 import { AgentRuntime, InMemoryDatabaseAdapter, createCharacter } from "@elizaos/core";
 import { researchPlugin } from "../plugins/researchPlugin.js";
+import { registerOpenAIModels } from "../providers/openaiModelProvider.js";
 import type { AgentConfig } from "./agentConfig.js";
 
 // -------------------------------------------------------------------------
@@ -76,6 +77,9 @@ Communication style:
   });
 
   await runtime.initialize({ allowNoDatabase: false });
+
+  // Register OpenAI model handlers (TEXT_LARGE, TEXT_SMALL)
+  registerOpenAIModels(runtime);
 
   return runtime;
 }
