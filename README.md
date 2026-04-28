@@ -1,4 +1,4 @@
-# Eliza Deep Research Agent
+# Eliza Deep Research Agent(My experiment with ElizaOS)
 
 Eliza Deep Research Agent is a powerful tool designed to provide high-quality market research, competitor analysis, and industry reports for founders, investors, marketers, and indie hackers. This project leverages advanced algorithms and data sources to deliver actionable insights and comprehensive reports.
 
@@ -15,7 +15,7 @@ To get started with the Eliza Deep Research Agent, follow these steps:
 
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/eliza-deep-research-agent.git
+   git clone https://github.com/msftwarelab/eliza-deep-research-agent.git
    ```
 2. Navigate to the project directory:
    ```
