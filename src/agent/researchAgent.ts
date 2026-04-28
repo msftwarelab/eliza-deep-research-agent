@@ -71,8 +71,7 @@ Communication style:
     adapter,
     logLevel: config.logLevel,
     settings: {
-      // Pass API keys to the runtime settings
-      ...(config.openaiApiKey ? { OPENAI_API_KEY: config.openaiApiKey } : {}),
+      AICCAPI_KEY: config.aiccApiKey,
     },
   });
 

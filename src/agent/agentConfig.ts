@@ -3,7 +3,7 @@
 // -------------------------------------------------------------------------
 
 export interface AgentConfig {
-  openaiApiKey: string;
+  aiccApiKey: string;
   tavilyApiKey: string;
   newsApiKey?: string;
   alphaVantageKey?: string;
@@ -14,8 +14,8 @@ export interface AgentConfig {
 export function loadConfig(): AgentConfig {
   const missing: string[] = [];
 
-  if (!process.env.OPENAI_API_KEY && !process.env.ANTHROPIC_API_KEY) {
-    missing.push("OPENAI_API_KEY (or ANTHROPIC_API_KEY)");
+  if (!process.env.AICCAPI_KEY) {
+    missing.push("AICCAPI_KEY");
   }
   if (!process.env.TAVILY_API_KEY) {
     missing.push("TAVILY_API_KEY");
@@ -30,7 +30,7 @@ export function loadConfig(): AgentConfig {
   }
 
   return {
-    openaiApiKey: process.env.OPENAI_API_KEY ?? "",
+    aiccApiKey: process.env.AICCAPI_KEY ?? "",
     tavilyApiKey: process.env.TAVILY_API_KEY ?? "",
     newsApiKey: process.env.NEWS_API_KEY,
     alphaVantageKey: process.env.ALPHA_VANTAGE_KEY,
@@ -49,7 +49,7 @@ export function printStartupBanner(config: AgentConfig): void {
 ║       Powered by ElizaOS v2                           ║
 ╠═══════════════════════════════════════════════════════╣
 ║  Services:                                            ║
-║    LLM (OpenAI GPT-4o)  ✅                            ║
+║    LLM (AICC GPT-4.1)   ✅                            ║
 ║    Web Search (Tavily)  ✅                            ║
 ║    News API             ${hasNews.padEnd(28)}║
 ║    Financial Data       ${hasAlpha.padEnd(28)}║

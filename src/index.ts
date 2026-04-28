@@ -2,11 +2,15 @@ import "dotenv/config";
 import readline from "readline";
 import express from "express";
 import type { Request, Response } from "express";
-import { ChannelType, MemoryType, stringToUuid } from "@elizaos/core";
+import { ChannelType, MemoryType, stringToUuid, ModelType } from "@elizaos/core";
 import type { Memory, IAgentRuntime } from "@elizaos/core";
 import { loadConfig, printStartupBanner } from "./agent/agentConfig.js";
 import { createResearchAgent } from "./agent/researchAgent.js";
 import { PORT } from "./constants/index.js";
+import { marketResearchAction } from "./actions/marketResearch.js";
+import { competitorAnalysisAction } from "./actions/competitorAnalysis.js";
+import { industryReportAction } from "./actions/industryReport.js";
+import { trendAnalysisAction } from "./actions/trendAnalysis.js";
 
 // =========================================================================
 // Deep Research Analyst Agent — Entry Point
@@ -84,31 +88,47 @@ async function startRestApi(runtime: IAgentRuntime, port: number): Promise<void>
   });
 }
 
-async function processQuery(runtime: IAgentRuntime, text: string): Promise<string> {
-  const agentId = runtime.agentId;
-  const worldId = stringToUuid("research-cli-world");
-  const roomId = stringToUuid("research-cli-room");
-  const userId = stringToUuid("cli-user");
+// =========================================================================
+// Direct query routing — bypasses ElizaOS message service checkpoint
+// validation (which requires large cloud models). Routes directly to
+// the appropriate action handler based on keywords, or calls the LLM
+// directly for general questions.
+// =========================================================================
 
-  // Ensure world exists (required by ElizaOS v2 before creating rooms)
-  const existingWorld = await runtime.getWorld(worldId);
-  if (!existingWorld) {
-    await runtime.createWorld({
-      id: worldId,
-      name: "CLI Research World",
-      agentId,
-      serverId: "cli",
-    });
+function detectIntent(text: string): { action: string; topic: string } {
+  const lower = text.toLowerCase();
+
+  // competitor / compare
+  if (/competitor|compet|rival|vs\b|versus|benchmark|compare/i.test(lower)) {
+    return { action: "competitors", topic: text.replace(/^.*(competitor[s]? (of|for|analysis)|analyze competitor[s]? of|compare)\s*/i, "").trim() || text };
+  }
+  // industry report
+  if (/industry|sector|vertical|landscape|overview of\b/i.test(lower)) {
+    return { action: "industry", topic: text.replace(/^.*(industry report (for|on)|generate.*(industry|sector) report for)\s*/i, "").trim() || text };
+  }
+  // trend analysis
+  if (/trend|emerging|forecast|future of|growth in|trajectory/i.test(lower)) {
+    return { action: "trends", topic: text.replace(/^.*(trend[s]? (in|for|of)|analyze trend[s]? in)\s*/i, "").trim() || text };
+  }
+  // market research (default for "research X" or "market X")
+  if (/market|research|analys|size|tam|opportunity|startup|space/i.test(lower)) {
+    return { action: "market", topic: text.replace(/^.*(research (the market for|market for|the)|market research (on|for)|analyze market)\s*/i, "").trim() || text };
   }
 
-  // Ensure room exists (worldId required in ElizaOS v2)
-  await runtime.ensureRoomExists({
-    id: roomId,
-    name: "CLI Research Session",
-    source: "cli",
-    type: ChannelType.DM,
-    worldId,
-  });
+  return { action: "chat", topic: text };
+}
+
+async function buildMessage(runtime: IAgentRuntime, text: string): Promise<Memory> {
+  const agentId = runtime.agentId;
+  const worldId = stringToUuid("research-cli-world");
+  const roomId  = stringToUuid("research-cli-room");
+  const userId  = stringToUuid("cli-user");
+
+  const existingWorld = await runtime.getWorld(worldId);
+  if (!existingWorld) {
+    await runtime.createWorld({ id: worldId, name: "CLI Research World", agentId, serverId: "cli" });
+  }
+  await runtime.ensureRoomExists({ id: roomId, name: "CLI Research Session", source: "cli", type: ChannelType.DM, worldId });
   await runtime.ensureParticipantInRoom(userId, roomId);
   await runtime.ensureParticipantInRoom(agentId, roomId);
 
@@ -118,37 +138,35 @@ async function processQuery(runtime: IAgentRuntime, text: string): Promise<strin
     entityId: userId,
     roomId,
     content: { text },
-    metadata: {
-      type: MemoryType.MESSAGE,
-      source: "cli",
-    },
+    metadata: { type: MemoryType.MESSAGE, source: "cli" },
   };
+  await runtime.createMemory(message, "messages");
+  return message;
+}
 
+async function processQuery(runtime: IAgentRuntime, text: string): Promise<string> {
+  const { action, topic } = detectIntent(text);
+  const message = await buildMessage(runtime, text);
+  const state = await runtime.composeState(message);
   let responseText = "";
 
-  // Save user message
-  await runtime.createMemory(message, "messages");
+  const callback = async (content: { text?: string }) => {
+    if (content.text) responseText += content.text;
+    return [];
+  };
 
-  // Process via message service
-  if (runtime.messageService) {
-    await runtime.messageService.handleMessage(runtime, message, async (content) => {
-      if (content.text) {
-        responseText += content.text;
-      }
-      return [];
-    });
+  if (action === "market") {
+    await marketResearchAction.handler(runtime, message, state, { topic }, callback);
+  } else if (action === "competitors") {
+    await competitorAnalysisAction.handler(runtime, message, state, { company: topic }, callback);
+  } else if (action === "industry") {
+    await industryReportAction.handler(runtime, message, state, { industry: topic }, callback);
+  } else if (action === "trends") {
+    await trendAnalysisAction.handler(runtime, message, state, { topic }, callback);
   } else {
-    // Fallback: direct action processing
-    const state = await runtime.composeState(message);
-    const responses: Memory[] = [];
-    await runtime.processActions(message, responses, state, async (content) => {
-      if (content.text) responseText += content.text;
-      return [];
-    });
-    if (!responseText) {
-      const result = await runtime.generateText(text);
-      responseText = typeof result === "string" ? result : (result as { text?: string }).text ?? "";
-    }
+    // General chat — call LLM directly
+    const prompt = `You are a helpful deep research analyst. Answer this question concisely:\n\n${text}`;
+    responseText = await runtime.useModel(ModelType.TEXT_LARGE, { prompt, maxTokens: 500, temperature: 0.7 }) as string;
   }
 
   return responseText || "Research complete. Check the reports/ directory for the saved report.";
